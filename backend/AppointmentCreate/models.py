@@ -1,8 +1,11 @@
 # appointments/models.py
+
+import uuid
 from django.db import models
 
 class Appointment(models.Model):
-    ghl_id = models.CharField(max_length=100, unique=True)
+    local_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    ghl_id = models.CharField(max_length=255, null=True, blank=True, unique=True)
     location_id = models.CharField(max_length=100)
     calendar_id = models.CharField(max_length=100)
     contact_id = models.CharField(max_length=100)

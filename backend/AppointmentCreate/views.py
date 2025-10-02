@@ -111,6 +111,9 @@ class AppointmentCreateView(APIView):
         except Exception as e:
             return Response({"error": "Error interno", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+import uuid
+
 @csrf_exempt
 def appointment_webhook(request):
     if request.method == "POST":
@@ -118,25 +121,52 @@ def appointment_webhook(request):
             data = json.loads(request.body)
 
             # Extraer datos principales del webhook
-            appointment_id = data.get("id")
-            calendar_id = data.get("calendarId")
-            contact_id = data.get("contactId")
-            start_time = data.get("startTime")
-            end_time = data.get("endTime")
-            status = data.get("appointmentStatus")
+            appointment_data = data.get("appointment", {})
+            appointment_id = data.get("ghl_id") or data.get("id") or appointment_data.get("id")
+            
+            if not appointment_id:
+                appointment_id = f"test-{uuid.uuid4()}"  # ID temporal para pruebas
 
-            # Guardar en tu DB
-            Appointment.objects.create(
+            # Normalizamos campos
+            calendar_id = data.get("calendarId") or appointment_data.get("calendarId")
+            contact_id = data.get("contactId") or appointment_data.get("contactId")
+            location_id = data.get("locationId") or appointment_data.get("locationId")
+            title = data.get("title") or appointment_data.get("title") or "Cita"
+            appointment_status = (
+                data.get("appointmentStatus") or
+                appointment_data.get("appointmentStatus") or
+                "confirmed"
+            )
+            assigned_user_id = (
+                data.get("assignedUserId") or appointment_data.get("assignedUserId")
+            )
+            notes = data.get("notes") or appointment_data.get("notes")
+            source = data.get("source") or appointment_data.get("source")
+
+            start_time = _to_datetime(data.get("startTime") or appointment_data.get("startTime"))
+            end_time = _to_datetime(data.get("endTime") or appointment_data.get("endTime"))
+
+            # Guardar o actualizar en DB
+            obj, created = Appointment.objects.update_or_create(
                 ghl_id=appointment_id,
-                calendar_id=calendar_id,
-                contact_id=contact_id,
-                start_time=start_time,
-                end_time=end_time,
-                status=status
+                defaults={
+                    "calendar_id": calendar_id,
+                    "contact_id": contact_id,
+                    "location_id": location_id,
+                    "title": title,
+                    "appointment_status": appointment_status,
+                    "assigned_user_id": assigned_user_id,
+                    "notes": notes,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "source": source,
+                }
             )
 
-            return JsonResponse({"ok": True}, status=200)
+            return JsonResponse(
+                {"ok": True, "ghl_id": appointment_id, "created": created}, status=200)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=400)
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
